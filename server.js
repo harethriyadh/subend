@@ -8,7 +8,7 @@ const cors = require('cors');
 const app = express();
 
 // Retrieve environment variables
-const secretKey = process.env.SECRET_KEY;
+const SECRET_KEY = process.env.SECRET_KEY;
 const mongoURI = process.env.MONGODB_URI;
 const port = process.env.PORT || 3000;
 
