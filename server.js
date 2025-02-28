@@ -13,7 +13,7 @@ const mongoURI = process.env.MONGODB_URI;
 const port = process.env.PORT || 3000;
 
 // Check if required environment variables are set
-if (!secretKey) {
+if (!SECRET_KEY) {
   console.error("SECRET_KEY environment variable is not set!");
   process.exit(1);
 }
@@ -110,7 +110,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
         const passwordMatch = await bcrypt.compare(password, user.password);
 
         if (passwordMatch) {
-          const token = jwt.sign({ userId: user._id }, secretKey, { expiresIn: '1h' });
+          const token = jwt.sign({ userId: user._id }, SECRET_KEY, { expiresIn: '1h' });
           res.json({ token });
         } else {
           res.status(401).json({ message: 'Invalid username or password' });
@@ -133,7 +133,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
       }
 
       try {
-        const decoded = jwt.verify(token, secretKey);
+        const decoded = jwt.verify(token, SECRET_KEY);
         req.userId = decoded.userId;
         next();
       } catch (err) {
