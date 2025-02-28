@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-const port = process.env.PORT || 8080;
 const secretKey = process.env.SECRET_KEY;
 
 app.use(express.urlencoded({ extended: true }));
@@ -141,6 +140,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
       }
     }
 
+    const port = process.env.PORT || 3000;
     app.listen(port, () => {
       console.log(`Server listening at http://localhost:${port}`);
     });
