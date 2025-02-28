@@ -10,7 +10,7 @@ const app = express();
 // Retrieve environment variables
 const secretKey = process.env.SECRET_KEY;
 const mongoURI = process.env.MONGODB_URI;
-const port = process.env.PORT || 3000; // Use PORT from environment or default to 3000
+const port = process.env.PORT || 3000;
 
 // Check if required environment variables are set
 if (!secretKey) {
@@ -54,7 +54,7 @@ async function checkMongoConnection(uri) {
   }
 }
 
-// Start the server after successful MongoDB connection
+// Start server after successful MongoDB connection
 checkMongoConnection(mongoURI).then(isConnected => {
   if (!isConnected) {
     console.error("MongoDB connection failed.  Exiting.");
@@ -73,11 +73,52 @@ checkMongoConnection(mongoURI).then(isConnected => {
     });
 
     app.post('/api/register', async (req, res) => {
-      // ... (registration logic as before)
+      const { username, password } = req.body;
+
+      try {
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+          return res.status(400).json({ message: 'Username already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({ username, password: hashedPassword });
+        await newUser.save();
+
+        res.status(201).json({ message: 'User registered successfully' });
+      } catch (error) {
+        console.error('Registration error:', error);
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.username === 1) {
+          return res.status(400).json({ message: 'Username already exists' });
+        } else if (error.name === 'ValidationError') {
+          return res.status(400).json({ message: error.message });
+        }
+        res.status(500).json({ message: 'Registration failed', error: error.message });
+      }
     });
 
     app.post('/api/login', async (req, res) => {
-      // ... (login logic as before)
+      const { username, password } = req.body;
+
+      try {
+        const user = await User.findOne({ username });
+
+        if (!user) {
+          return res.status(401).json({ message: 'Invalid username or password' });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
+
+        if (passwordMatch) {
+          const token = jwt.sign({ userId: user._id }, secretKey, { expiresIn: '1h' });
+          res.json({ token });
+        } else {
+          res.status(401).json({ message: 'Invalid username or password' });
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Login failed', error: error.message });
+      }
     });
 
     app.get('/api/protected', authenticate, (req, res) => {
@@ -86,9 +127,11 @@ checkMongoConnection(mongoURI).then(isConnected => {
 
     function authenticate(req, res, next) {
       const token = req.header('Authorization')?.split(' ')[1];
+
       if (!token) {
         return res.status(401).json({ message: 'No token, authorization denied' });
       }
+
       try {
         const decoded = jwt.verify(token, secretKey);
         req.userId = decoded.userId;
@@ -98,7 +141,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
       }
     }
 
-    // Start the Express server
+    // Start Express server
     app.listen(port, () => {
       console.log(`Server listening at http://localhost:${port}`);
     });

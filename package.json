@@ -1,7 +1,7 @@
 {
   "name": "subend",
   "version": "1.0.0",
-  "description": "read me",
+  "description": "project",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
