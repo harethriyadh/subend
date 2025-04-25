@@ -64,6 +64,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
     const userSchema = new mongoose.Schema({
       username: { type: String, required: true, unique: true },
       password: { type: String, required: true },
+      role: { type: String, enum: ['employee', 'manager', 'admin'], default: 'employee' }, // Added role field
     });
     const User = mongoose.model('User', userSchema);
 
@@ -73,7 +74,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
     });
 
     app.post('/api/register', async (req, res) => {
-      const { username, password } = req.body;
+      const { username, password, role } = req.body; // Expecting 'role' in the request body
 
       try {
         const existingUser = await User.findOne({ username });
@@ -82,10 +83,14 @@ checkMongoConnection(mongoURI).then(isConnected => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ username, password: hashedPassword });
+        const newUser = new User({
+          username,
+          password: hashedPassword,
+          role: role || 'employee', // Use provided role or default to 'employee'
+        });
         await newUser.save();
 
-        res.status(201).json({ message: 'User registered successfully' });
+        res.status(201).json({ message: 'User registered successfully', role: newUser.role }); // Include the role in the success response
       } catch (error) {
         console.error('Registration error:', error);
         if (error.code === 11000 && error.keyPattern && error.keyPattern.username === 1) {
@@ -110,8 +115,8 @@ checkMongoConnection(mongoURI).then(isConnected => {
         const passwordMatch = await bcrypt.compare(password, user.password);
 
         if (passwordMatch) {
-          const token = jwt.sign({ userId: user._id }, SECRET_KEY, { expiresIn: '1h' });
-          res.json({ token });
+          const token = jwt.sign({ userId: user._id, role: user.role }, SECRET_KEY, { expiresIn: '1h' }); // Include role in the token
+          res.json({ token, role: user.role }); // Send the role in the response
         } else {
           res.status(401).json({ message: 'Invalid username or password' });
         }
@@ -122,7 +127,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
     });
 
     app.get('/api/protected', authenticate, (req, res) => {
-      res.json({ message: 'This is a protected resource!', userId: req.userId });
+      res.json({ message: 'This is a protected resource!', userId: req.userId, role: req.userRole }); // Access role from the request
     });
 
     function authenticate(req, res, next) {
@@ -135,6 +140,7 @@ checkMongoConnection(mongoURI).then(isConnected => {
       try {
         const decoded = jwt.verify(token, SECRET_KEY);
         req.userId = decoded.userId;
+        req.userRole = decoded.role; // Store the role in the request
         next();
       } catch (err) {
         res.status(401).json({ message: 'Token is not valid' });
