@@ -6,7 +6,7 @@ const mongoURI = process.env.MONGODB_URI;
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['employee', 'manager', 'admin'], default: 'employee' }, // Added role field
+  role: { type: String, enum: ['employee', 'manager',  'leader','admin'], default: 'employee' }, // Added role field
 });
 
 const User = mongoose.model('User', userSchema);
