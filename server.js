@@ -130,7 +130,7 @@ connectToMongo()
                         },
                     });
                 } else {
-                    res.status(401).json({ message: 'Invalid username or password' });
+                    res.status(401).json({ message: 'Invalid username or  password' });
                 }
             } catch (error) {
                 console.error('Login error:', error);
