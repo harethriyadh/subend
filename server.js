@@ -4,40 +4,34 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { User, connectToMongo } = require('./mongo'); // Import User model and connectToMongo
 
 const app = express();
-const port = process.env.PORT || 8080;
-const secretKey = process.env.SECRET_KEY;
 
 // Retrieve environment variables
 const SECRET_KEY = process.env.SECRET_KEY;
 const mongoURI = process.env.MONGODB_URI;
 const port = process.env.PORT || 3000;
 
-if (!secretKey) {
+// Check if required environment variables are set
+if (!SECRET_KEY) {
   console.error("SECRET_KEY environment variable is not set!");
   process.exit(1);
 }
 
+if (!mongoURI) {
+  console.error("MONGODB_URI environment variable is not set!");
+  process.exit(1);
+}
+
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection and Test
-const mongoURI = process.env.MONGODB_URI;
-
-if (!mongoURI) {
-    console.error("MONGODB_URI environment variable is not set!");
-    process.exit(1);
-}
-
+// MongoDB Connection
 async function checkMongoConnection(uri) {
   try {
-    console.log("Connecting to MongoDB with URI:", uri); // <--- URI logging
-
-    await mongoose.connect(uri, {
-      dbName: "unidata"
-    });
+    console.log("Connecting to MongoDB with URI:", uri);
+    await mongoose.connect(uri, { dbName: "unidata" });
     console.log("MongoDB connection test successful!");
     return true;
   } catch (error) {
@@ -60,100 +54,69 @@ async function checkMongoConnection(uri) {
   }
 }
 
+// Start server after successful MongoDB connection
 checkMongoConnection(mongoURI).then(isConnected => {
   if (!isConnected) {
     console.error("MongoDB connection failed.  Exiting.");
     process.exit(1);
   } else {
+    // Define User Schema and Model
     const userSchema = new mongoose.Schema({
       username: { type: String, required: true, unique: true },
       password: { type: String, required: true },
+      role: { type: String, enum: ['employee', 'manager', 'leader', 'admin'], default: 'employee' }, // Added role field
     });
-
     const User = mongoose.model('User', userSchema);
 
+    // Routes
     app.get('/', (req, res) => {
       res.send('Hello, World!');
     });
 
     app.post('/api/register', async (req, res) => {
-      const { username, password } = req.body;
+      const { username, password, role } = req.body; // Expecting 'role' in the request body
 
-            try {
-                // Trim whitespace from all input fields
-                const trimmedName = name ? name.trim() : '';
-                const trimmedUsername = username ? username.trim() : '';
-                const trimmedPassword = password ? password.trim() : '';
-                const trimmedRole = role ? role.trim() : '';
-                const trimmedAvailableDaysOff = availableDaysOff ? String(availableDaysOff).trim() : ''; // Trim availableDaysOff
-
-                const errors = {};
-
-                // Check for missing required fields with specific error messages
-                if (!trimmedName) {
-                    errors.name = 'الاسم مطلوب'; // Name is required
-                }
-                if (!trimmedUsername) {
-                    errors.username = 'اسم المستخدم مطلوب'; // Username is required
-                }
-                if (!trimmedPassword) {
-                    errors.password = 'كلمة المرور مطلوبة'; // Password is required
-                }
-                if (!trimmedRole) {
-                    errors.role = 'الدور مطلوب'; // Role is required
-                }
-                // You might want to make availableDaysOff mandatory as well, depending on your requirements
-                if (availableDaysOff === undefined || trimmedAvailableDaysOff === '') {
-                    errors.availableDaysOff = 'عدد أيام الإجازة المتاحة مطلوب'; // Available days off is required
-                } else if (isNaN(parseInt(trimmedAvailableDaysOff, 10))) {
-                    errors.availableDaysOff = 'عدد أيام الإجازة المتاحة يجب أن يكون رقمًا'; // Available days off must be a number
-                }
-
-                // If there are any errors, return a 400 status with the error object
-                if (Object.keys(errors).length > 0) {
-                    return res.status(400).json({ errors: errors, message: 'الرجاء إدخال جميع الحقول المطلوبة بشكل صحيح' }); // Please enter all required fields correctly
-                }
-
-                const existingUser = await User.findOne({ username: trimmedUsername });
-                if (existingUser) {
-                    return res.status(400).json({ message: 'اسم المستخدم موجود بالفعل' }); // Username already exists
-                }
+      try {
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+          return res.status(400).json({ message: 'Username already exists' });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ username, password: hashedPassword });
+        const newUser = new User({
+          username,
+          password: hashedPassword,
+          role: role || 'employee', // Use provided role or default to 'employee'
+        });
         await newUser.save();
 
-        res.status(201).json({ message: 'User registered successfully' });
+        res.status(201).json({ message: 'User registered successfully', role: newUser.role }); // Include the role in the success response
       } catch (error) {
         console.error('Registration error:', error);
-        if (error.code === 11000 && error.keyPattern && error.keyPattern.username === 1) { // MongoDB duplicate key error (username)
+        if (error.code === 11000 && error.keyPattern && error.keyPattern.username === 1) {
           return res.status(400).json({ message: 'Username already exists' });
         } else if (error.name === 'ValidationError') {
-          return res.status(400).json({ message: error.message }); // Mongoose validation error
+          return res.status(400).json({ message: error.message });
         }
         res.status(500).json({ message: 'Registration failed', error: error.message });
       }
     });
 
-        app.post('/api/login', async (req, res) => {
-            const { username, password } = req.body;
+    app.post('/api/login', async (req, res) => {
+      const { username, password } = req.body;
 
-            try {
-                // Trim whitespace from username and password
-                const trimmedUsername = username ? username.trim() : '';
-                const trimmedPassword = password ? password.trim() : '';
+      try {
+        const user = await User.findOne({ username });
 
-                const user = await User.findOne({ username: trimmedUsername });
+        if (!user) {
+          return res.status(401).json({ message: 'Invalid username or password' });
+        }
 
-                if (!user) {
-                    return res.status(401).json({ message: 'Invalid username or password' });
-                }
-
-                const passwordMatch = await bcrypt.compare(trimmedPassword, user.password);
+        const passwordMatch = await bcrypt.compare(password, user.password);
 
         if (passwordMatch) {
-          const token = jwt.sign({ userId: user._id }, secretKey, { expiresIn: '1h' });
-          res.json({ token });
+          const token = jwt.sign({ userId: user._id, role: user.role }, SECRET_KEY, { expiresIn: '1h' }); // Include role in the token
+          res.json({ token, role: user.role }); // Send the role in the response
         } else {
           res.status(401).json({ message: 'Invalid username or password' });
         }
@@ -164,25 +127,27 @@ checkMongoConnection(mongoURI).then(isConnected => {
     });
 
     app.get('/api/protected', authenticate, (req, res) => {
-      res.json({ message: 'This is a protected resource!', userId: req.userId });
+      res.json({ message: 'This is a protected resource!', userId: req.userId, role: req.userRole }); // Access role from the request
     });
 
-        function authenticate(req, res, next) {
-            const token = req.header('Authorization')?.split(' ')[1];
+    function authenticate(req, res, next) {
+      const token = req.header('Authorization')?.split(' ')[1];
 
-            if (!token) {
-                return res.status(401).json({ message: 'No token, authorization denied' });
-            }
+      if (!token) {
+        return res.status(401).json({ message: 'No token, authorization denied' });
+      }
 
       try {
-        const decoded = jwt.verify(token, secretKey);
+        const decoded = jwt.verify(token, SECRET_KEY);
         req.userId = decoded.userId;
+        req.userRole = decoded.role; // Store the role in the request
         next();
       } catch (err) {
         res.status(401).json({ message: 'Token is not valid' });
       }
     }
 
+    // Start Express server
     app.listen(port, () => {
       console.log(`Server listening at http://localhost:${port}`);
     });
