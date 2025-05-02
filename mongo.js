@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, required: true, enum: ['employee', 'manager', 'admin', 'leader'] },
-    availableDaysOff: {  // Corrected default value definition
+    availableDaysOff: { // Corrected default value definition
         type: Number,
         default: function() {
             const startDate = new Date('2024-12-01');
@@ -24,14 +24,19 @@ const userSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now },
 });
 
+const User = mongoose.model('User', userSchema);
+
 const sessionSchema = new mongoose.Schema({
     session_id: { type: String, required: true, unique: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    created_at: { type: Date, default: Date.now },
+    created_at: {
+      type: Date,
+      default: () => new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000),
+    },
     expires_at: { type: Date, required: true },
-});
+  });
 
-const User = mongoose.model('User', userSchema);
+const Session = mongoose.model('Session', sessionSchema);
 
 async function connectToMongo() {
     if (!mongoURI) {
@@ -41,7 +46,7 @@ async function connectToMongo() {
 
     try {
         await mongoose.connect(mongoURI, {
-            dbName: process.env.DB_NAME || 'your_database_name'
+            dbName: process.env.DB_NAME || 'unidata' // Using 'unidata' as fallback based on your server.js
         });
         console.log('Connected to MongoDB');
     } catch (error) {
@@ -52,14 +57,14 @@ async function connectToMongo() {
 
 connectToMongo();
 
-module.exports = { User, connectToMongo };
+module.exports = { User, Session, connectToMongo };
 
 async function checkMongoConnection(uri) {
     try {
         console.log("Connecting to MongoDB with URI:", uri);
 
         await mongoose.connect(uri, {
-            dbName: process.env.DB_NAME || 'your_database_name',
+            dbName: process.env.DB_NAME || 'unidata', // Using 'unidata' as fallback
         });
         console.log("MongoDB connection test successful!");
         return true;
@@ -80,42 +85,14 @@ async function checkMongoConnection(uri) {
             console.error("Other connection error:", error);
         }
         return false;
+    } finally {
+        // Disconnect after the test to avoid keeping the connection open unnecessarily
+        if (mongoose.connection.readyState === 1) {
+            await mongoose.disconnect();
+            console.log("Disconnected MongoDB after test.");
+        }
     }
 }
 
-
-
-
-
-
-// const mongoose = require('mongoose');
-
-// const mongoURI = process.env.MONGODB_URI; // No default value here!
-
-// const userSchema = new mongoose.Schema({
-//   username: { type: String, required: true, unique: true },
-//   password: { type: String, required: true },
-// });
-
-// const User = mongoose.model('User', userSchema);
-
-// async function connectToMongo() {
-//   if (!mongoURI) {
-//     console.error("MONGODB_URI environment variable is not set!");
-//     process.exit(1); // Exit if URI is missing
-//   }
-
-//   try {
-//     await mongoose.connect(mongoURI, {
-//       dbName: process.env.DB_NAME || 'your_database_name' // Keep dbName with fallback
-//     });
-//     console.log('Connected to MongoDB');
-//   } catch (error) {
-//     console.error('Error connecting to MongoDB:', error);
-//     process.exit(1); // Exit on connection error
-//   }
-// }
-
-// connectToMongo();
-
-// module.exports = { User, connectToMongo };
+// You might want to call this function separately to test your connection
+// checkMongoConnection(mongoURI);
