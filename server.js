@@ -167,7 +167,7 @@ app.post('/api/login', async (req, res) => {
 
     // Create a new session in the database
     const session_id = uuidv4();
-    const expires_at = new Date(Date.now() + (2 * 60 * 1000));
+    const expires_at = new Date(Date.now() + (1 * 60 * 1000)); 
     const newSession = new Session({
       session_id: session_id,
       user: _id,
